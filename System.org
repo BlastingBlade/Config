@@ -1,0 +1,207 @@
+#+TITLE: System Configuration
+
+#+begin_src scheme :tangle ~/.config/guix/systems/base-system.scm
+  (define-module (base-system)
+    #:use-module (gnu)
+    #:use-module (srfi srfi-1)
+    #:use-module (gnu system nss)
+    #:use-module (gnu services pm)
+    #:use-module (gnu services cups)
+    #:use-module (gnu services desktop)
+    #:use-module (gnu services networking)
+    #:use-module (gnu services virtualization)
+    #:use-module (gnu services xorg)
+    #:use-module (gnu packages wm)
+    #:use-module (gnu packages cups)
+    #:use-module (gnu packages vim)
+    #:use-module (gnu packages gtk)
+    #:use-module (gnu packages xorg)
+    #:use-module (gnu packages emacs)
+    #:use-module (gnu packages gnome)
+    #:use-module (gnu packages mtools)
+    #:use-module (gnu packages linux)
+    #:use-module (gnu packages audio)
+    #:use-module (gnu packages gnuzilla)
+    #:use-module (gnu packages pulseaudio)
+    #:use-module (gnu packages web-browsers)
+    #:use-module (gnu packages version-control)
+    #:use-module (gnu packages package-management)
+    #:use-module (gnu packages terminals)
+    #:use-module (gnu packages bootloaders)
+    #:use-module (gnu packages certs)
+    #:use-module (nongnu packages linux)
+    #:use-module (nongnu system linux-initrd)
+    #:export (%blasting-file-systems-base)
+    #:export (blasting-system-base))
+
+  (define %backlight-udev-rule
+    (udev-rule
+     "90-backlight.rules"
+     (string-append "ACTION==\"add\", SUBSYSTEM==\"backlight\", "
+                    "RUN+=\"/run/current-system/profile/bin/chgrp video /sys/class/backlight/%k/brightness\""
+                    "\n"
+                    "ACTION==\"add\", SUBSYSTEM==\"backlight\", "
+                    "RUN+=\"/run/current-system/profile/bin/chmod g+w /sys/class/backlight/%k/brightness\"")))
+
+  (define %xorg-libinput-config
+    "Section \"InputClass\"
+    Identifier \"Touchpads\"
+    Driver \"libinput\"
+    MatchDevicePath \"/dev/input/event*\"
+    MatchIsTouchpad \"on\"
+
+    Option \"Tapping\" \"on\"
+    Option \"TappingDrag\" \"on\"
+    Option \"DisableWhileTyping\" \"on\"
+    Option \"MiddleEmulation\" \"on\"
+    Option \"ScrollMethod\" \"twofinger\"
+  EndSection
+  Section \"InputClass\"
+    Identifier \"Keyboards\"
+    Driver \"libinput\"
+    MatchDevicePath \"/dev/input/event*\"
+    MatchIsKeyboard \"on\"
+  EndSection
+  ")
+
+  (define %blasting-file-systems-base
+    (cons*
+     (file-system
+      (device "none")
+      (mount-point "/tmp")
+      (type "tmpfs")
+      (options "size=6G")
+      (check? #f))
+    %base-file-systems))
+
+  (define blasting-system-base
+    (operating-system
+     (host-name "basting-zoomer")
+     (timezone "America/New_York")
+     (locale "en_US.utf8")
+
+     ;; Non-free kernel and firmware
+     (kernel linux)
+     (firmware (list linux-firmware)) ;; TODO: pair down
+     (initrd microcode-initrd)
+
+     (keyboard-layout (keyboard-layout "us"))
+
+     (bootloader (bootloader-configuration
+                  (bootloader grub-efi-bootloader)
+                  (target "/boot/efi")))
+
+     ;; Assume the target root file system is labelled "my-root",
+     ;; and the EFI System Partition has UUID 1234-ABCD.
+     (file-systems %blasting-file-systems-base)
+
+     (users (cons (user-account
+                   (name "blasting")
+                   (comment "Henry Fiantaca")
+                   (group "users")
+                   (supplementary-groups '("wheel"
+                                           "netdev"
+                                           "kvm"
+                                           "libvirt"
+                                           "tty"
+                                           "input"
+                                           "realtime"
+                                           "lp" ;; bluetooth is a line printer?
+                                           "audio"
+                                           "video")))
+                  %base-user-accounts))
+
+     (groups (cons (user-group (system? #t) (name "realtime"))
+                   %base-groups))
+
+     (packages (append (list
+                        git
+                        exfat-utils
+                        fuse-exfat
+                        bluez
+                        bluez-alsa
+                        pulseaudio
+                        tlp
+                        xf86-input-libinput
+                        gvfs
+                        ;; window managers
+                        awesome
+                        ;; editors
+                        emacs
+                        vim
+                        ;; terminal emulator
+                        alacritty
+                        ;; for HTTPS access
+                        nss-certs)
+                       %base-packages))
+
+     (services 
+      (cons*
+       (service tlp-service-type
+                (tlp-configuration
+                 (cpu-boost-on-ac? #t)
+                 (wifi-pwr-on-bat? #t)))
+       (service libvirt-service-type
+                (libvirt-configuration
+                 (unix-sock-group "libvirt")))
+       (service cups-service-type
+                (cups-configuration
+                 (web-interface? #t)
+                 (extensions
+                  (list cups-filters hplip-minimal))))
+       (bluetooth-service #:auto-enable? #t)
+
+       (modify-services %desktop-services
+                        (elogind-service-type config =>
+                                              (elogind-configuration (inherit config)
+                                                                     (handle-lid-switch-external-power 'suspend)))
+                                          ;(gdm-service-type config =>
+                                          ;		     (gdm-configuration (inherit config)
+                                          ;					(xorg-configuration
+                                          ;					  (xorg-configuration
+                                          ;					    (extra-config '(%xorg-libinput-config))))))
+                        (udev-service-type config =>
+                                           (udev-configuration (inherit config)
+                                                               (rules (cons %backlight-udev-rule
+                                                                            (udev-configuration-rules config))))))))
+
+
+     (name-service-switch %mdns-host-lookup-nss)))
+#+end_src
+
+#+begin_src scheme :tangle ~/.config/guix/systems/oldbook.scm
+  (define-module (oldbook)
+    #:use-module (base-system)
+    #:use-module (gnu))
+
+  (operating-system
+   (inherit blasting-system-base)
+   (host-name "blasting-oldbook")
+
+   (file-systems (cons*
+                  (file-system
+                   (device (uuid "5bfae5c8-d5c2-4bb8-9e9e-c3331e2e9ab7"))
+                   (mount-point "/")
+                   (type "btrfs")
+                   (flags '(no-atime))
+                   (options "subvol=/@guix,compress=zstd"))
+                  (file-system
+                   (device (uuid "6878-0E41" 'fat))
+                   (mount-point "/boot/efi")
+                   (type "vfat"))
+                  (file-system
+                   (device (uuid "5bfae5c8-d5c2-4bb8-9e9e-c3331e2e9ab7"))
+                   (mount-point "/home")
+                   (type "btrfs")
+                   (flags '(no-atime))
+                   (options "subvol=/@home,compress=zstd"))
+                  (file-system
+                   (device (uuid "5bfae5c8-d5c2-4bb8-9e9e-c3331e2e9ab7"))
+                   (mount-point "/var/lib/swap")
+                   (type "btrfs")
+                   (flags '(no-atime))
+                   (options "subvol=/@swap")) ;; needs more to disable compression and cow
+                  %blasting-file-systems-base))
+
+   (swap-devices '("/var/lib/swap/swapfile")))
+#+end_src

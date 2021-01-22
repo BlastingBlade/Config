@@ -1,0 +1,255 @@
+#+TITLE: Email via MU4E
+#+PROPERTY: header-args:emacs-lisp :tangle ~/.config/emacs/lisp/email.el :mkdirp yes
+
+* Info
+#+begin_src emacs-lisp :tangle ~/.config/emacs/lisp/email.el :mkdirp yes
+;;; email -- email configuration
+;;; Commentary:
+;;; See Mail.org
+;;; Code:
+#+end_src
+
+** Requirements
+- mbsync (isync)
+- *System-Installed* mu and emacs-mu4e
+- password-store *AND* ~authinfo.gpg~
+
+** File Locations
+- ~/.mbsyncrc~
+- ~/.local/share/maildir~
+- ~/.config/emacs/lisp/email.el~
+** TODO
+- replace password-store requirement with emacsclient/authinfo call
+- better shortcuts/bookmarks
+
+* Load
+Load MU4E and integrate with Emacs' internal mail system.
+#+begin_src emacs-lisp :tangle ~/.config/emacs/lisp/email.el :mkdirp yes
+  (require 'mu4e)
+
+  (setq mail-user-agent 'mu4e-user-agent
+        smtpmail-stream-type 'ssl
+        send-mail-function #'smtpmail-send-it)
+#+end_src
+
+* Configure
+Setup basic configuration.
+#+begin_src emacs-lisp :tangle ~/.config/emacs/lisp/email.el :mkdirp yes
+  (setq mu4e-compose-format-flowed t
+        mu4e-view-show-addresses t
+        mu4e-view-show-images t
+        mu4e-view-image-max-width 800
+        message-kill-buffer-on-exit t
+        mu4e-confirm-quit nil)
+  #+end_src
+
+** Icons
+Thanks to Doom Emacs for developing this icon set
+#+begin_src emacs-lisp
+  (setq mu4e-use-fancy-chars t
+        mu4e-headers-draft-mark '("D" . "")
+        mu4e-headers-flagged-mark '("F" . "")
+        mu4e-headers-new-mark '("N" . "")
+        mu4e-headers-passed-mark '("P" . "")
+        mu4e-headers-replied-mark '("R" . "")
+        mu4e-headers-seen-mark '("S" . "")
+        mu4e-headers-trashed-mark '("T" . "")
+        mu4e-headers-attach-mark '("a" . "")
+        mu4e-headers-encrypted-mark '("x" . "")
+        mu4e-headers-signed-mark '("s" . "")
+        mu4e-headers-unread-mark '("u" . ""))
+#+end_src
+
+* Mailboxs
+
+#+begin_src emacs-lisp :tangle ~/.config/emacs/lisp/email.el :mkdirp yes :noweb no-export
+  (setq mu4e-update-interval (* 10 60)
+        mu4e-get-mail-command "mbsync -a"
+        mu4e-maildir "~/.local/share/maildir/"
+        mu4e-change-filenames-when-moving t
+        mu4e-contexts (list
+                       <<gmail-context>>
+                       <<uncc-context>>)
+        mu4e-maildir-shortcuts
+        '((:maildir "/Inbox"             :key ?i)
+          (:maildir "/gmail/[Gmail]/Sent Mail" :key ?s)
+          (:maildir "/gmail/[Gmail]/Trash"     :key ?t)
+          (:maildir "/gmail/[Gmail]/Drafts"    :key ?d)
+          (:maildir "/gmail/[Gmail]/All Mail"  :key ?a))
+        mu4e-bookmarks
+        '((:name "gmail unread" :query "m:/gmail/Inbox AND flag:unread AND NOT flag:trashed" :key ?g)
+          (:name "uncc unread" :query "m:/uncc/Inbox AND flag:unread AND NOT flag:trashed" :key ?u)
+          (:name "all last week" :query "m:/gmail/Inbox AND m:/uncc/Inbox AND date:7d..now" :key ?w)))
+#+end_src
+
+** Gmail
+
+*** Context
+
+#+name: gmail-context
+#+begin_src emacs-lisp :tangle no
+  (make-mu4e-context
+   :name "gmail"
+   :match-func
+   (lambda (msg)
+     (if msg
+         (string-prefix-p "/gmail" (mu4e-message-field msg :maildir))
+       ;; responding to a nil `msg' decides the default context
+       t))
+   :vars '((user-mail-address  . "hfiantaca@gmail.com")
+           (user-full-name     . "Henry Fiantaca")
+
+           (mu4e-drafts-folder . "/gmail/[Gmail]/Drafts")
+           (mu4e-sent-folder   . "/gmail/[Gmail]/Sent Mail")
+           (mu4e-refile-folder . "/gmail/[Gmail]/All Mail")
+           (mu4e-trash-folder  . "/gmail/[Gmail]/Trash")
+
+           (mu4e-sent-messages-behavior . delete)
+           (mu4e-index-cleanup . nil)
+           (mu4e-index-lazy-check . t)
+
+           (smtpmail-default-smtp-server . "smtp.gmail.com")
+           (smtpmail-smtp-server . "smtp.gmail.com")
+           (smtpmail-smtp-service . 465)
+           (smtpmail-local-domain . "gmail.com")))
+#+end_src
+
+*** Sync
+
+#+begin_src conf :tangle ~/.mbsyncrc
+  IMAPAccount gmail
+  Host imap.gmail.com
+  User hfiantaca@gmail.com
+  PassCmd "pass mu4e.google.com"
+  SSLType IMAPS
+  CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+  IMAPStore gmail-remote
+  Account gmail
+
+  MaildirStore gmail-local
+  Subfolders Verbatim
+  Path ~/.local/share/maildir/gmail/
+  Inbox ~/.local/share/maildir/gmail/Inbox
+
+  Channel gmail
+  Master :gmail-remote:
+  Slave :gmail-local:
+  Patterns * ![Gmail]* "[Gmail]/Sent Mail" "[Gmail]/Starred" "[Gmail]/All Mail" "[Gmail]/Trash"
+  Create Both
+  SyncState *
+#+end_src
+
+** UNCC
+
+*** Context
+
+#+name: uncc-context
+#+begin_src emacs-lisp :tangle no
+  (make-mu4e-context
+   :name "uncc"
+   :match-func
+   (lambda (msg)
+     (when msg
+       (string-prefix-p "/uncc" (mu4e-message-field msg :maildir))))
+   :vars '((user-mail-address  . "hfiantac@uncc.edu")
+           (user-full-name     . "Henry Fiantaca")
+           (mu4e-drafts-folder . "/uncc/[Gmail]/Drafts")
+           (mu4e-sent-folder   . "/uncc/[Gmail]/Sent Mail")
+           (mu4e-refile-folder . "/uncc/[Gmail]/All Mail")
+           (mu4e-trash-folder  . "/uncc/[Gmail]/Trash")
+
+           (mu4e-sent-messages-behavior . delete)
+           (mu4e-index-cleanup . nil)
+           (mu4e-index-lazy-check . t)
+
+           (smtpmail-default-smtp-server . "smtp.gmail.com")
+           (smtpmail-smtp-server . "smtp.gmail.com")
+           (smtpmail-smtp-service . 465)
+           (smtpmail-local-domain . "gmail.com")))
+#+end_src
+
+*** Sync
+
+#+begin_src conf :tangle ~/.mbsyncrc
+  IMAPAccount uncc
+  Host imap.gmail.com
+  User hfiantac@uncc.edu
+  PassCmd "pass mu4e.uncc.edu"
+  SSLType IMAPS
+  CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+  IMAPStore uncc-remote
+  Account uncc
+
+  MaildirStore uncc-local
+  Subfolders Verbatim
+  Path ~/.local/share/maildir/uncc/
+  Inbox ~/.local/share/maildir/uncc/Inbox
+
+  Channel uncc
+  Master :uncc-remote:
+  Slave :uncc-local:
+  Patterns * ![Gmail]* "[Gmail]/Sent Mail" "[Gmail]/Starred" "[Gmail]/All Mail" "[Gmail]/Trash"
+  Create Both
+  SyncState *
+#+end_src
+
+* Org-Msg
+
+#+begin_src emacs-lisp :tangle ~/.config/emacs/lisp/email.el :mkdirp yes
+  (use-package org-msg
+    :after mu4e
+    :custom
+    (org-msg-options "html-postamble:nil H:5 num:nil ^:{} toc:nil author:nil email:nil \\n:t")
+    (org-msg-startup "hidestars indent inlineimages")
+    (org-msg-greeting-fmt "\nHi *%s*,\n\n")
+    (org-msg-greeting-name-limit 3)
+    (org-msg-default-alternatives '(text html))
+    (org-msg-convert-citation t)
+    (org-msg-signature "
+
+  ---
+
+   ,#+begin_signature
+   -- *Henry Fiantaca* \\\\
+   /Come to the GNU Side, we have penguins!/
+   ,#+end_signature")
+   :init
+   (org-msg-mode))
+#+end_src
+
+* Else
+
+#+begin_src emacs-lisp :tangle ~/.config/emacs/lisp/email.el :mkdirp yes
+(provide 'email)
+;;; email ends here
+#+end_src
+
+** SMTP
+slated for removal
+#+begin_src conf
+  defaults
+  auth  on
+  tls   on
+  tls_trust_file /etc/ssl/certs/ca-certificates.crt
+  logfile ~/.cache/msmtp.log
+
+  # Gmail
+  account gmail
+  host    smtp.gmail.com
+  port    587
+  from    hfiantaca@gmail.com
+  user    hfiantaca
+  passwordeval "pass mu4e.google.com"
+
+  account default : gmail
+
+  # UNCC
+  account uncc
+  host    smtp.gmail.com
+  port    587
+  from    hfiantac@uncc.edu
+  user    hfiantac@uncc.edu
+  passwordeval "pass mu4e.uncc.edu"
+#+end_src

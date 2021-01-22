@@ -1,0 +1,62 @@
+#+TITLE: System Configuration
+#+AUTHOR: Henry Fiantaca
+#+SUBTITLE: A Theoretical Extension of the Mind
+
+* Overview
+I would like my system to be extensible, predictable, and pre-defined.
+To achieve this, only open source and community driven software can fit the bill.
+Additionally, a base system and user environment would need to have simple, documented configuration and extensibility interfaces.
+
+- Base System
+  - Guix
+
+    The GNU Guix system is a clear winner as the base system.
+    A declarative system, written in Guile Scheme, is used to configure the base system.
+    Every run creates a new "generation," and an old generation can be booted in the event of failure.
+
+    User profiles are maintained separate from the base system, allowing a mixed declarative and ad-hoc package availability.
+    Development environments can be made for any project with specific package versions, upgraded or removed separate from the system or user profile.
+
+    Base system literate configuration can be found in [[file:System.org][System.org]].
+    TODO: Profile configuration.
+
+- Environment
+  - Emacs
+
+    Emacs is the most extensible software I know of.
+    While originally just a text editor written in a custom LISP, the functionality for just about everything vaigly text-related has been written in this LISP dialect since.
+    
+    Today, Emacs can regularly handle version-control, every LSP enabled programming language, project management, file management, terminal emulation, document creation, scheduling, journaling, literate programming, and more.
+
+    My Emacs config aims to revolve around a single daemon in a graphical session, and provide:
+    - A complete projectile/lsp/magit programming stack for C(++), Rust, Guile, and HTML5
+
+    - A complete, easy-to-use, document suite and literate programming environment via Org-Mode
+
+    - An Email client for both my personal and university Gmail via MU4E and mbsync
+
+    - A full featured interface to file management and shell utilities via Dired and VTerm/EShell
+
+    - An integrated password management system via password-store
+
+    Literate configuration in [[file:Emacs.org][Emacs.org]].
+    Email literate configuration in [[file:Mail.org][Mail.org]].
+
+  - Awesome
+
+    This Lua-powered window manager just feels nice to use.
+    Awesome provides a default config that has DWM-style dynamic tiling, a decent sysbar, theming, and Vim binding!
+
+    Configured (with X11) in [[file:Awesome.org][Awesome.org]].
+
+* TODO 
+- Settle on a scheme to manage guix profiles, and manage custom guile modules.
+- Use dotfile management to more safely tangle configuration.
+  - Automate this deployment.
+  - Automate guix profile management with deployment.
+- Ensure all my config files are accounted for.
+- Reevaluate contents of Emacs.org.
+- Finish LSP and dir-local-variables in Emacs.org.
+- Finish with Awesome.org.
+- Write bootstrapping shell script or elisp script.
+- Document how to install and configure a Guix system with System.org.
